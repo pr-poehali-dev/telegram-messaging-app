@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { AUTH_URL, User } from "./types";
 
@@ -9,10 +9,44 @@ interface ProfileTabProps {
   onLogout: () => void;
 }
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 export default function ProfileTab({ user, token, onUserUpdate, onLogout }: ProfileTabProps) {
   const [editingProfile, setEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState({ display_name: "", bio: "" });
   const [saveLoading, setSaveLoading] = useState(false);
+
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [isIos, setIsIos] = useState(false);
+  const [showIosHint, setShowIosHint] = useState(false);
+
+  useEffect(() => {
+    const isIosDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
+    setIsIos(isIosDevice);
+    setIsInstalled(isStandalone);
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => setIsInstalled(true));
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (isIos) { setShowIosHint(true); return; }
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") setIsInstalled(true);
+    setInstallPrompt(null);
+  };
 
   const handleSaveProfile = async () => {
     setSaveLoading(true);
@@ -25,6 +59,8 @@ export default function ProfileTab({ user, token, onUserUpdate, onLogout }: Prof
     setSaveLoading(false);
     if (data.user) { onUserUpdate(data.user); setEditingProfile(false); }
   };
+
+  const showInstallButton = !isInstalled && (installPrompt || isIos);
 
   return (
     <div className="flex-1 overflow-y-auto scroll-custom px-4 pb-4">
@@ -50,6 +86,63 @@ export default function ProfileTab({ user, token, onUserUpdate, onLogout }: Prof
           Редактировать профиль
         </button>
       </div>
+
+      {/* Install banner */}
+      {showInstallButton && !showIosHint && (
+        <button
+          onClick={handleInstall}
+          className="w-full mb-4 rounded-2xl p-4 flex items-center gap-3.5 animate-fade-in text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
+          style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.2), rgba(6,182,212,0.15))", border: "1px solid rgba(168,85,247,0.35)", boxShadow: "0 4px 20px rgba(168,85,247,0.15)" }}
+        >
+          <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #a855f7, #06b6d4)" }}>
+            <Icon name="Download" size={20} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">Установить приложение</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Добавить на главный экран телефона</p>
+          </div>
+          <Icon name="ChevronRight" size={16} className="text-neon-purple flex-shrink-0" />
+        </button>
+      )}
+
+      {/* iOS hint */}
+      {showIosHint && (
+        <div className="w-full mb-4 glass-strong rounded-2xl p-4 animate-fade-in border border-neon-cyan/30">
+          <div className="flex items-start justify-between mb-2">
+            <p className="text-sm font-semibold text-white">Как установить на iPhone</p>
+            <button onClick={() => setShowIosHint(false)} className="text-muted-foreground hover:text-white transition-colors ml-2 flex-shrink-0">
+              <Icon name="X" size={15} />
+            </button>
+          </div>
+          <ol className="space-y-2">
+            {[
+              { icon: "Share", text: 'Нажмите кнопку "Поделиться" внизу Safari' },
+              { icon: "Plus", text: 'Выберите "На экран «Домой»"' },
+              { icon: "Check", text: "Нажмите «Добавить» — готово!" },
+            ].map((step, i) => (
+              <li key={i} className="flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(6,182,212,0.2)" }}>
+                  <Icon name={step.icon} size={12} className="text-neon-cyan" />
+                </div>
+                <span className="text-xs text-foreground/70">{step.text}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {/* Installed badge */}
+      {isInstalled && (
+        <div className="w-full mb-4 glass rounded-2xl p-3.5 flex items-center gap-3 border border-neon-green/20 animate-fade-in">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(34,197,94,0.15)" }}>
+            <Icon name="CheckCircle" size={16} className="text-neon-green" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-white">Приложение установлено</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Волна на вашем главном экране</p>
+          </div>
+        </div>
+      )}
 
       {/* Edit form */}
       {editingProfile && (
