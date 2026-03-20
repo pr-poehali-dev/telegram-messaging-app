@@ -1,8 +1,20 @@
 import { useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 
+const AUTH_URL = "https://functions.poehali.dev/5f6a86ea-ec4a-448b-b7a1-4d8a8e6edf8c";
+
 type Tab = "chats" | "nearby" | "profile";
 type ChatId = "alice" | "boris" | "chat" | null;
+type AuthScreen = "login" | "register";
+
+interface User {
+  id: number;
+  username: string;
+  display_name: string;
+  avatar_initials: string;
+  avatar_color: string;
+  bio: string;
+}
 
 interface Message {
   id: number;
@@ -64,7 +76,158 @@ const NOTIFICATIONS = [
   { id: 4, icon: "Heart", color: "#22c55e", text: "Борис Эфир добавил вас в контакты", time: "вчера" },
 ];
 
+// Auth screen component
+function AuthPage({ onAuth }: { onAuth: (user: User, token: string) => void }) {
+  const [screen, setScreen] = useState<AuthScreen>("login");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [regForm, setRegForm] = useState({ username: "", display_name: "", password: "" });
+
+  const handleLogin = async () => {
+    if (!loginForm.username || !loginForm.password) { setError("Заполните все поля"); return; }
+    setLoading(true); setError("");
+    const res = await fetch(`${AUTH_URL}?action=login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(loginForm),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error || "Ошибка входа"); return; }
+    localStorage.setItem("wave_token", data.token);
+    onAuth(data.user, data.token);
+  };
+
+  const handleRegister = async () => {
+    if (!regForm.username || !regForm.display_name || !regForm.password) { setError("Заполните все поля"); return; }
+    setLoading(true); setError("");
+    const res = await fetch(`${AUTH_URL}?action=register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(regForm),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error || "Ошибка регистрации"); return; }
+    localStorage.setItem("wave_token", data.token);
+    onAuth(data.user, data.token);
+  };
+
+  return (
+    <div className="h-screen w-screen overflow-hidden flex flex-col items-center justify-center bg-background mesh-bg px-6">
+      {/* Logo */}
+      <div className="flex flex-col items-center gap-3 mb-10">
+        <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center animate-float shadow-[0_0_40px_rgba(168,85,247,0.4)]">
+          <Icon name="Waves" size={28} className="text-white" />
+        </div>
+        <div className="text-center">
+          <h1 className="font-cormorant text-4xl text-white font-light glow-text-purple tracking-wide">Волна</h1>
+          <p className="text-sm text-muted-foreground mt-1">мессенджер нового поколения</p>
+        </div>
+      </div>
+
+      {/* Card */}
+      <div className="w-full max-w-sm glass-strong rounded-3xl p-6 border border-white/10">
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 glass rounded-2xl p-1">
+          {(["login", "register"] as AuthScreen[]).map(s => (
+            <button
+              key={s}
+              onClick={() => { setScreen(s); setError(""); }}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${screen === s ? "nav-item-active text-white" : "text-muted-foreground hover:text-white"}`}
+            >
+              {s === "login" ? "Войти" : "Регистрация"}
+            </button>
+          ))}
+        </div>
+
+        {screen === "login" ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Никнейм</label>
+              <input
+                value={loginForm.username}
+                onChange={e => setLoginForm(p => ({ ...p, username: e.target.value }))}
+                onKeyDown={e => e.key === "Enter" && handleLogin()}
+                placeholder="your_username"
+                className="w-full px-4 py-3 rounded-2xl glass text-sm text-white placeholder:text-muted-foreground outline-none focus:border-neon-purple/50 border border-transparent transition-all"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Пароль</label>
+              <input
+                type="password"
+                value={loginForm.password}
+                onChange={e => setLoginForm(p => ({ ...p, password: e.target.value }))}
+                onKeyDown={e => e.key === "Enter" && handleLogin()}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 rounded-2xl glass text-sm text-white placeholder:text-muted-foreground outline-none focus:border-neon-purple/50 border border-transparent transition-all"
+              />
+            </div>
+            {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+            <button
+              onClick={handleLogin}
+              disabled={loading}
+              className="w-full py-3.5 rounded-2xl font-semibold text-sm text-white transition-all hover:scale-[1.02] active:scale-[0.98] mt-2 disabled:opacity-60"
+              style={{ background: "linear-gradient(135deg, #a855f7, #06b6d4)", boxShadow: "0 4px 20px rgba(168,85,247,0.35)" }}
+            >
+              {loading ? <span className="flex items-center justify-center gap-2"><Icon name="Loader2" size={16} className="animate-spin" />Вход...</span> : "Войти"}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Имя и фамилия</label>
+              <input
+                value={regForm.display_name}
+                onChange={e => setRegForm(p => ({ ...p, display_name: e.target.value }))}
+                placeholder="Иван Петров"
+                className="w-full px-4 py-3 rounded-2xl glass text-sm text-white placeholder:text-muted-foreground outline-none focus:border-neon-purple/50 border border-transparent transition-all"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Никнейм</label>
+              <input
+                value={regForm.username}
+                onChange={e => setRegForm(p => ({ ...p, username: e.target.value }))}
+                placeholder="ivan_petrov"
+                className="w-full px-4 py-3 rounded-2xl glass text-sm text-white placeholder:text-muted-foreground outline-none focus:border-neon-purple/50 border border-transparent transition-all"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Пароль</label>
+              <input
+                type="password"
+                value={regForm.password}
+                onChange={e => setRegForm(p => ({ ...p, password: e.target.value }))}
+                onKeyDown={e => e.key === "Enter" && handleRegister()}
+                placeholder="минимум 6 символов"
+                className="w-full px-4 py-3 rounded-2xl glass text-sm text-white placeholder:text-muted-foreground outline-none focus:border-neon-purple/50 border border-transparent transition-all"
+              />
+            </div>
+            {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+            <button
+              onClick={handleRegister}
+              disabled={loading}
+              className="w-full py-3.5 rounded-2xl font-semibold text-sm text-white transition-all hover:scale-[1.02] active:scale-[0.98] mt-2 disabled:opacity-60"
+              style={{ background: "linear-gradient(135deg, #a855f7, #06b6d4)", boxShadow: "0 4px 20px rgba(168,85,247,0.35)" }}
+            >
+              {loading ? <span className="flex items-center justify-center gap-2"><Icon name="Loader2" size={16} className="animate-spin" />Создаю аккаунт...</span> : "Создать аккаунт"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Index() {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string>("");
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [tab, setTab] = useState<Tab>("chats");
   const [openChat, setOpenChat] = useState<ChatId>(null);
   const [messages, setMessages] = useState(MESSAGES);
@@ -73,11 +236,35 @@ export default function Index() {
   const [searchQuery, setSearchQuery] = useState("");
   const [locGranted, setLocGranted] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [editForm, setEditForm] = useState({ display_name: "", bio: "" });
+  const [saveLoading, setSaveLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const savedToken = localStorage.getItem("wave_token");
+    if (!savedToken) { setAuthLoading(false); return; }
+    fetch(`${AUTH_URL}?action=me`, { headers: { "X-Session-Token": savedToken } })
+      .then(r => r.json())
+      .then(data => {
+        if (data.user) { setUser(data.user); setToken(savedToken); }
+        else { localStorage.removeItem("wave_token"); }
+      })
+      .catch(() => localStorage.removeItem("wave_token"))
+      .finally(() => setAuthLoading(false));
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [openChat, messages]);
+
+  const handleAuth = (u: User, t: string) => { setUser(u); setToken(t); };
+
+  const handleLogout = async () => {
+    await fetch(`${AUTH_URL}?action=logout`, { method: "POST", headers: { "X-Session-Token": token } });
+    localStorage.removeItem("wave_token");
+    setUser(null); setToken("");
+  };
 
   const sendMessage = () => {
     if (!input.trim() || !openChat) return;
@@ -90,12 +277,21 @@ export default function Index() {
     setInput("");
   };
 
+  const handleSaveProfile = async () => {
+    setSaveLoading(true);
+    const res = await fetch(`${AUTH_URL}?action=me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Session-Token": token },
+      body: JSON.stringify(editForm),
+    });
+    const data = await res.json();
+    setSaveLoading(false);
+    if (data.user) { setUser(data.user); setEditingProfile(false); }
+  };
+
   const requestLocation = () => {
     setLocLoading(true);
-    setTimeout(() => {
-      setLocGranted(true);
-      setLocLoading(false);
-    }, 1500);
+    setTimeout(() => { setLocGranted(true); setLocLoading(false); }, 1500);
   };
 
   const currentContact = openChat ? CONTACTS.find(c => c.id === openChat) : null;
@@ -103,6 +299,21 @@ export default function Index() {
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.lastMsg.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (authLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background mesh-bg">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center animate-float">
+            <Icon name="Waves" size={24} className="text-white" />
+          </div>
+          <Icon name="Loader2" size={20} className="text-neon-purple animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return <AuthPage onAuth={handleAuth} />;
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col bg-background mesh-bg font-golos">
@@ -183,7 +394,6 @@ export default function Index() {
         {/* === CHATS TAB === */}
         {tab === "chats" && !openChat && (
           <div className="flex-1 overflow-hidden flex flex-col">
-            {/* Search */}
             <div className="px-4 mb-3">
               <div className="relative">
                 <Icon name="Search" size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -191,29 +401,23 @@ export default function Index() {
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Поиск сообщений..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-2xl glass text-sm text-foreground placeholder:text-muted-foreground outline-none focus:neon-border-purple transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-2xl glass text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all"
                 />
               </div>
             </div>
-
             <div className="flex-1 overflow-y-auto scroll-custom px-4 space-y-2 pb-4">
               {filteredContacts.map((contact, i) => (
                 <button
                   key={contact.id}
                   onClick={() => setOpenChat(contact.id as ChatId)}
-                  className="w-full glass rounded-2xl p-3.5 flex items-center gap-3.5 hover:bg-white/[0.07] transition-all text-left animate-fade-in group"
+                  className="w-full glass rounded-2xl p-3.5 flex items-center gap-3.5 hover:bg-white/[0.07] transition-all text-left animate-fade-in"
                   style={{ animationDelay: `${i * 60}ms` }}
                 >
                   <div className="relative flex-shrink-0">
-                    <div
-                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-bold text-white"
-                      style={{ background: `linear-gradient(135deg, ${contact.color}60, ${contact.color}30)`, border: `1px solid ${contact.color}50` }}
-                    >
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-bold text-white" style={{ background: `linear-gradient(135deg, ${contact.color}60, ${contact.color}30)`, border: `1px solid ${contact.color}50` }}>
                       {contact.avatar}
                     </div>
-                    {contact.online && (
-                      <span className="absolute -bottom-0.5 -right-0.5 online-dot" />
-                    )}
+                    {contact.online && <span className="absolute -bottom-0.5 -right-0.5 online-dot" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
@@ -240,26 +444,18 @@ export default function Index() {
           <div className="flex-1 overflow-hidden flex flex-col">
             <div className="flex-1 overflow-y-auto scroll-custom px-4 py-2 space-y-2">
               {(messages[openChat] || []).map((msg, i) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.out ? "justify-end" : "justify-start"} animate-fade-in`}
-                  style={{ animationDelay: `${i * 40}ms` }}
-                >
+                <div key={msg.id} className={`flex ${msg.out ? "justify-end" : "justify-start"} animate-fade-in`} style={{ animationDelay: `${i * 40}ms` }}>
                   <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${msg.out ? "message-bubble-out rounded-br-sm" : "message-bubble-in rounded-bl-sm"}`}>
                     <p className="text-sm text-white leading-relaxed">{msg.text}</p>
                     <div className={`flex items-center gap-1 mt-1 ${msg.out ? "justify-end" : "justify-start"}`}>
                       <span className="text-[10px] text-white/40">{msg.time}</span>
-                      {msg.out && (
-                        <Icon name={msg.read ? "CheckCheck" : "Check"} size={11} className={msg.read ? "text-neon-cyan" : "text-white/40"} />
-                      )}
+                      {msg.out && <Icon name={msg.read ? "CheckCheck" : "Check"} size={11} className={msg.read ? "text-neon-cyan" : "text-white/40"} />}
                     </div>
                   </div>
                 </div>
               ))}
               <div ref={messagesEndRef} />
             </div>
-
-            {/* Input */}
             <div className="px-4 pb-4 pt-2">
               <div className="flex items-center gap-2 glass-strong rounded-2xl p-2 border border-neon-purple/20">
                 <button className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/10 transition-colors flex-shrink-0">
@@ -308,9 +504,7 @@ export default function Index() {
                   className="px-8 py-3.5 rounded-2xl font-semibold text-sm text-white transition-all hover:scale-105 active:scale-95"
                   style={{ background: "linear-gradient(135deg, #a855f7, #06b6d4)", boxShadow: "0 4px 20px rgba(168,85,247,0.4)" }}
                 >
-                  {locLoading ? (
-                    <span className="flex items-center gap-2"><Icon name="Loader2" size={16} className="animate-spin" /> Определяю...</span>
-                  ) : "Разрешить геолокацию"}
+                  {locLoading ? <span className="flex items-center gap-2"><Icon name="Loader2" size={16} className="animate-spin" /> Определяю...</span> : "Разрешить геолокацию"}
                 </button>
               </div>
             ) : (
@@ -319,8 +513,6 @@ export default function Index() {
                   <span className="online-dot flex-shrink-0" />
                   <span className="text-xs text-foreground/70">Москва, Центральный район · обновлено только что</span>
                 </div>
-
-                {/* Map-like visual */}
                 <div className="glass rounded-3xl p-4 mb-4 border border-white/10 relative overflow-hidden" style={{ height: "160px" }}>
                   <div className="absolute inset-0 opacity-10">
                     {[...Array(8)].map((_, i) => (
@@ -331,10 +523,7 @@ export default function Index() {
                     <div className="w-4 h-4 rounded-full bg-neon-purple animate-pulse-ring" />
                   </div>
                   {NEARBY.map((u, i) => {
-                    const positions = [
-                      { top: "20%", left: "70%" }, { top: "65%", left: "25%" },
-                      { top: "30%", left: "20%" }, { top: "70%", left: "75%" }
-                    ];
+                    const positions = [{ top: "20%", left: "70%" }, { top: "65%", left: "25%" }, { top: "30%", left: "20%" }, { top: "70%", left: "75%" }];
                     return (
                       <div key={u.id} className="absolute z-10 flex flex-col items-center" style={positions[i]}>
                         <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-background" style={{ background: u.color }}>
@@ -346,7 +535,6 @@ export default function Index() {
                   })}
                   <div className="absolute bottom-2 right-3 text-[10px] text-white/30 font-cormorant italic">карта приближения</div>
                 </div>
-
                 <div className="space-y-2 pb-4">
                   {NEARBY.map((u, i) => (
                     <div key={u.id} className="glass rounded-2xl p-3.5 flex items-center gap-3.5 animate-fade-in" style={{ animationDelay: `${i * 60}ms` }}>
@@ -361,12 +549,8 @@ export default function Index() {
                         <p className="text-xs text-muted-foreground">{u.status}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1.5">
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color: u.color, background: `${u.color}20`, border: `1px solid ${u.color}30` }}>
-                          {u.distance}
-                        </span>
-                        <button className="text-[11px] text-muted-foreground hover:text-white transition-colors">
-                          Написать
-                        </button>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color: u.color, background: `${u.color}20`, border: `1px solid ${u.color}30` }}>{u.distance}</span>
+                        <button className="text-[11px] text-muted-foreground hover:text-white transition-colors">Написать</button>
                       </div>
                     </div>
                   ))}
@@ -379,23 +563,68 @@ export default function Index() {
         {/* === PROFILE TAB === */}
         {tab === "profile" && (
           <div className="flex-1 overflow-y-auto scroll-custom px-4 pb-4">
-            {/* Avatar */}
             <div className="flex flex-col items-center py-6 gap-3">
               <div className="relative">
-                <div className="w-20 h-20 rounded-3xl flex items-center justify-center text-2xl font-bold text-white avatar-ring" style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.5), rgba(6,182,212,0.3))" }}>
-                  ВЫ
+                <div
+                  className="w-20 h-20 rounded-3xl flex items-center justify-center text-2xl font-bold text-white avatar-ring"
+                  style={{ background: `linear-gradient(135deg, ${user.avatar_color}80, ${user.avatar_color}40)` }}
+                >
+                  {user.avatar_initials}
                 </div>
-                <button className="absolute -bottom-1 -right-1 w-7 h-7 rounded-xl glass-strong flex items-center justify-center border border-white/20">
-                  <Icon name="Camera" size={13} className="text-white" />
-                </button>
               </div>
               <div className="text-center">
-                <h2 className="font-cormorant text-2xl text-white font-light">Ваш профиль</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">@username · В сети</p>
+                <h2 className="font-cormorant text-2xl text-white font-light">{user.display_name}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">@{user.username} · В сети</p>
+                {user.bio && <p className="text-sm text-foreground/60 mt-1.5 max-w-[220px] leading-relaxed">{user.bio}</p>}
               </div>
+              <button
+                onClick={() => { setEditingProfile(true); setEditForm({ display_name: user.display_name, bio: user.bio }); }}
+                className="px-4 py-2 rounded-xl glass text-xs text-neon-purple border border-neon-purple/30 hover:bg-neon-purple/10 transition-colors"
+              >
+                Редактировать профиль
+              </button>
             </div>
 
-            {/* Stats */}
+            {/* Edit form */}
+            {editingProfile && (
+              <div className="glass-strong rounded-2xl p-4 mb-4 border border-neon-purple/20 animate-fade-in">
+                <p className="text-xs font-semibold text-white mb-3">Редактирование</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Имя</label>
+                    <input
+                      value={editForm.display_name}
+                      onChange={e => setEditForm(p => ({ ...p, display_name: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-xl glass text-sm text-white placeholder:text-muted-foreground outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">О себе</label>
+                    <textarea
+                      value={editForm.bio}
+                      onChange={e => setEditForm(p => ({ ...p, bio: e.target.value }))}
+                      rows={2}
+                      className="w-full px-3 py-2.5 rounded-xl glass text-sm text-white placeholder:text-muted-foreground outline-none resize-none"
+                      placeholder="Расскажите о себе..."
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditingProfile(false)} className="flex-1 py-2 rounded-xl glass text-sm text-muted-foreground border border-white/10 hover:text-white transition-colors">
+                      Отмена
+                    </button>
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={saveLoading}
+                      className="flex-1 py-2 rounded-xl text-sm text-white font-medium transition-all disabled:opacity-60"
+                      style={{ background: "linear-gradient(135deg, #a855f7, #06b6d4)" }}
+                    >
+                      {saveLoading ? "Сохраняю..." : "Сохранить"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-3 mb-4">
               {[
                 { label: "Диалогов", value: "3", color: "#a855f7" },
@@ -409,57 +638,33 @@ export default function Index() {
               ))}
             </div>
 
-            {/* Settings Sections */}
-            <div className="space-y-3">
-              {/* Profile Info */}
-              <div className="glass rounded-2xl overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-white/5">
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Профиль</span>
-                </div>
-                {[
-                  { icon: "User", label: "Имя", value: "Ваше имя", color: "#a855f7" },
-                  { icon: "AtSign", label: "Никнейм", value: "@username", color: "#06b6d4" },
-                  { icon: "FileText", label: "О себе", value: "Напишите о себе...", color: "#ec4899" },
-                ].map((item, i) => (
-                  <button key={i} className="w-full flex items-center gap-3.5 px-4 py-3.5 hover:bg-white/[0.04] transition-colors border-b border-white/5 last:border-0 text-left">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${item.color}20` }}>
-                      <Icon name={item.icon} size={15} style={{ color: item.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-muted-foreground">{item.label}</p>
-                      <p className="text-sm text-white/70">{item.value}</p>
-                    </div>
-                    <Icon name="ChevronRight" size={15} className="text-muted-foreground" />
-                  </button>
-                ))}
+            <div className="glass rounded-2xl overflow-hidden mb-3">
+              <div className="px-4 py-2.5 border-b border-white/5">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Настройки</span>
               </div>
-
-              {/* Settings */}
-              <div className="glass rounded-2xl overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-white/5">
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Настройки</span>
-                </div>
-                {[
-                  { icon: "Bell", label: "Уведомления", color: "#a855f7" },
-                  { icon: "MapPin", label: "Геолокация", color: "#06b6d4" },
-                  { icon: "Lock", label: "Приватность", color: "#ec4899" },
-                  { icon: "Palette", label: "Оформление", color: "#22c55e" },
-                ].map((item, i) => (
-                  <button key={i} className="w-full flex items-center gap-3.5 px-4 py-3.5 hover:bg-white/[0.04] transition-colors border-b border-white/5 last:border-0 text-left">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${item.color}20` }}>
-                      <Icon name={item.icon} size={15} style={{ color: item.color }} />
-                    </div>
-                    <span className="flex-1 text-sm text-white">{item.label}</span>
-                    <Icon name="ChevronRight" size={15} className="text-muted-foreground" />
-                  </button>
-                ))}
-              </div>
-
-              <button className="w-full glass rounded-2xl p-3.5 flex items-center justify-center gap-2 text-destructive border border-destructive/20 hover:bg-destructive/10 transition-colors">
-                <Icon name="LogOut" size={16} />
-                <span className="text-sm font-medium">Выйти</span>
-              </button>
+              {[
+                { icon: "Bell", label: "Уведомления", color: "#a855f7" },
+                { icon: "MapPin", label: "Геолокация", color: "#06b6d4" },
+                { icon: "Lock", label: "Приватность", color: "#ec4899" },
+                { icon: "Palette", label: "Оформление", color: "#22c55e" },
+              ].map((item, i) => (
+                <button key={i} className="w-full flex items-center gap-3.5 px-4 py-3.5 hover:bg-white/[0.04] transition-colors border-b border-white/5 last:border-0 text-left">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${item.color}20` }}>
+                    <Icon name={item.icon} size={15} style={{ color: item.color }} />
+                  </div>
+                  <span className="flex-1 text-sm text-white">{item.label}</span>
+                  <Icon name="ChevronRight" size={15} className="text-muted-foreground" />
+                </button>
+              ))}
             </div>
+
+            <button
+              onClick={handleLogout}
+              className="w-full glass rounded-2xl p-3.5 flex items-center justify-center gap-2 text-red-400 border border-red-400/20 hover:bg-red-400/10 transition-colors"
+            >
+              <Icon name="LogOut" size={16} />
+              <span className="text-sm font-medium">Выйти</span>
+            </button>
           </div>
         )}
       </main>
@@ -478,14 +683,8 @@ export default function Index() {
                 onClick={() => setTab(item.id as Tab)}
                 className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all ${tab === item.id ? "nav-item-active" : "hover:bg-white/[0.04]"}`}
               >
-                <Icon
-                  name={item.icon}
-                  size={20}
-                  className={tab === item.id ? "text-neon-purple" : "text-muted-foreground"}
-                />
-                <span className={`text-[11px] font-medium ${tab === item.id ? "text-white" : "text-muted-foreground"}`}>
-                  {item.label}
-                </span>
+                <Icon name={item.icon} size={20} className={tab === item.id ? "text-neon-purple" : "text-muted-foreground"} />
+                <span className={`text-[11px] font-medium ${tab === item.id ? "text-white" : "text-muted-foreground"}`}>{item.label}</span>
               </button>
             ))}
           </div>
